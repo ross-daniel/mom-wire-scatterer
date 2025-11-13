@@ -12,7 +12,7 @@ license = {text = "MIT"}
 authors = [{ name = "Ross Stauder" }]
 dependencies = [
   # Put your runtime deps here, e.g.:
-  # "numpy>=1.25",
+  "numpy>=1.25",
   # "scipy>=1.10",
 ]
 
