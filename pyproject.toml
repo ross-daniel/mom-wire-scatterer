@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mom-wire-scatterer"                  # distribution name on pip (hyphens ok here)
+version = "0.1.0"                    # or use setuptools_scm later
+description = "MoM Solver for PEC Wire Scatterer"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{ name = "Ross Stauder" }]
+dependencies = [
+  # Put your runtime deps here, e.g.:
+  # "numpy>=1.25",
+  # "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "ruff>=0.5",       # linter/formatter (optional)
+  "mypy>=1.8",       # type checking (optional)
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]       # tell setuptools to look in src/
