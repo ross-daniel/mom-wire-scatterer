@@ -1,6 +1,8 @@
 import numpy as np
 import src.mom_wire_scatterer.constants as constants
 import src.mom_wire_scatterer.numerical_integration as numerical_integration
+from typing import Tuple
+
 
 class ZConstructor:
     def __init__(self, num_divisions: int, wire_length: float, wire_radius: float, omega: float,
@@ -49,3 +51,26 @@ class ZConstructor:
         term2 = np.exp(-1j * self.beta * R_1) / R_1
         term3 = np.exp(-1j * self.beta * R_2) / R_2
         return term1 - 2 * term2 + term3
+
+
+class ConstructExcitation:
+    def __init__(self, num_divisions: int, wire_length: float, wire_radius: float, omega: float,
+                 source_location: Tuple[float, float], incident_magnitude: float):
+        self.num_divisions = num_divisions
+        self.wire_length = wire_length
+        self.d = self.wire_length / self.num_divisions
+        self.wire_radius = wire_radius
+        self.omega = omega
+        self.source_x = source_location[0]
+        self.source_z = source_location[1]
+        self.incident_magnitude = incident_magnitude
+        self.E_iz = np.zeros(self.num_divisions, dtype=np.complex128)
+        self.theta_iz = np.zeros(self.num_divisions, dtype=np.float64)
+        self.find_theta_Eiz()
+
+    def find_theta_Eiz(self):
+        for division_index in range(self.num_divisions):
+            z_n_prime = self.d / 2 + self.d * division_index
+            self.theta_iz[division_index] = np.arctan(self.source_x / abs(self.source_z - z_n_prime))
+            self.E_iz[division_index] = self.incident_magnitude * np.cos(self.theta_iz[division_index])
+
