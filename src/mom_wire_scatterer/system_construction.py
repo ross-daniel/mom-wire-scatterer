@@ -14,7 +14,7 @@ class ZConstructor:
         self.beta = 2 * np.pi * constants.c_0 / self.omega
         self.d = self.L / self.N
         self.approx_degree = approx_degree
-        self.Z = np.zeros((self.N, self.M))
+        self.Z = np.zeros((self.N, self.M), dtype=np.complex128)
         for m in range(self.N):
             for n in range(self.M):
                 self.Z[m, n] = self.calculate_Zmn(m, n)
@@ -61,6 +61,7 @@ class ConstructExcitation:
         self.d = self.wire_length / self.num_divisions
         self.wire_radius = wire_radius
         self.omega = omega
+        self.beta = 2 * np.pi * constants.c_0 / self.omega
         self.source_x = source_location[0]
         self.source_z = source_location[1]
         self.incident_magnitude = incident_magnitude
@@ -71,6 +72,20 @@ class ConstructExcitation:
     def find_theta_Eiz(self):
         for division_index in range(self.num_divisions):
             z_n_prime = self.d / 2 + self.d * division_index
+            R = np.sqrt(self.source_x ** 2 + abs(self.source_z - z_n_prime) ** 2)
             self.theta_iz[division_index] = np.arctan(self.source_x / abs(self.source_z - z_n_prime))
-            self.E_iz[division_index] = self.incident_magnitude * np.cos(self.theta_iz[division_index])
+            self.E_iz[division_index] = self.incident_magnitude * np.cos(self.theta_iz[division_index]) * np.exp(-1j * self.beta * R) / R
 
+if __name__ == '__main__':
+    E_mag = 1.0
+    L = 0.5
+    num_divs = 10
+    wire_radius = 0.002
+    f = 200E6
+    omega = 2 * np.pi * f
+    excitation = ConstructExcitation(num_divs, L, wire_radius, omega, (1, L/2), E_mag)
+    print(excitation.E_iz)
+    Z_constructor = ZConstructor(num_divs, L, wire_radius, omega)
+    print(Z_constructor.Z)
+    I_n_coefficients = np.linalg.solve(Z_constructor.Z, excitation.E_iz)
+    print(I_n_coefficients)
