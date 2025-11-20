@@ -7,3 +7,9 @@ def numerical_integral(f: Callable[[np.ndarray], np.ndarray], degree: int, bound
     x, w = np.polynomial.legendre.leggauss(degree)
     t = 0.5 * (x + 1) * (b - a) + a
     return np.sum(w * f(t)) * 0.5 * (b - a)
+
+
+if __name__ == '__main__':
+    func = lambda x: np.sin(x)
+    period = 2 * np.pi
+    print(numerical_integral(func, 3, (0, period)))
