@@ -93,12 +93,11 @@ class WireScattererSystem:
         self.E_iz = self.excitation_constructor.E_iz
         self.Z = self.matrix_constructor.Z
         self.In = np.linalg.solve(self.Z, self.E_iz)
-        self.In = np.insert(self.In, 0, 0)
-        self.In = np.insert(self.In, 0, -1)
         self.N = self.matrix_constructor.N
         self.beta = self.matrix_constructor.beta
         self.d = self.matrix_constructor.d
         self.omega = self.matrix_constructor.omega
+        self.rcs = self.compute_rcs(self.excitation_constructor.theta_incident)
 
     def psi_3(self, n, theta):
         dist_term_num = np.exp(1j * self.beta * self.d * np.cos(theta) * n)
@@ -114,9 +113,10 @@ class WireScattererSystem:
         return dist_term_num / dist_term_den * (inner_term1 - inner_term2)
 
     def compute_scattered_field(self, theta):
-        Q = np.zeros(len(self.In), dtype=np.complex128)
+        Q = 0
+        I_appended = np.insert(np.insert(self.In, 0, 0), -1, 0)
         for n in range(self.matrix_constructor.N):
-            Q[n] = self.In[n] * self.psi_3(n+1, theta) + (self.In[n+1] - self.In[n+2]) / self.d * self.psi_4(n, theta)
+            Q += I_appended[n] * self.psi_3(n, theta) + (I_appended[n+1] - I_appended[n+2]) / self.d * self.psi_4(n, theta)
         def Erad(r):
             return 1j * self.omega * np.sin(theta) * constants.mu_0 / (4 * np.pi) * np.exp(-1j * self.beta * r) / r * Q
         return Erad, Q
@@ -125,10 +125,11 @@ class WireScattererSystem:
         _, Q = self.compute_scattered_field(theta)
         numerator = (self.omega * constants.mu_0 * np.sin(theta)) ** 2 * abs(Q) ** 2
         denom = 4 * np.pi * self.excitation_constructor.incident_magnitude ** 2
+        return numerator / denom
 
     def plot_current_distribution(self, axes: list[plt.Axes]):
         assert len(axes) < 3
-        z = np.linspace(0, self.matrix_constructor.L, self.matrix_constructor.N)
+        z = np.linspace(0, self.matrix_constructor.L, len(self.In))
         axes[0].plot(z, abs(self.In))
         try:
             axes[1].plot(z, np.angle(self.In))
@@ -151,3 +152,4 @@ if __name__ == '__main__':
     ax1.set_title('Magnitude of Current Distribution along the Wire Scatterer')
     ax2.set_title('Phase of Current Distribution along the Wire Scatterer')
     plt.show()
+    print(f'RCS: {scatter_system.rcs}')
