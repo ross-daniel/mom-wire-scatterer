@@ -93,6 +93,29 @@ class WireScattererSystem:
         self.E_iz = self.excitation_constructor.E_iz
         self.Z = self.matrix_constructor.Z
         self.In = np.linalg.solve(self.Z, self.E_iz)
+        self.In = np.insert(self.In, 0, 0)
+        self.In = np.insert(self.In, 0, -1)
+        self.N = self.matrix_constructor.N
+        self.beta = self.matrix_constructor.beta
+        self.d = self.matrix_constructor.d
+
+    def psi_3(self, n, theta):
+        dist_term_num = np.exp(1j * self.beta * self.d * np.cos(theta) * n)
+        dist_term_den = 1j * self.beta * np.cos(theta)
+        inner_term = np.exp(-1j * self.beta * self.d * np.cos(theta))
+        return dist_term_num / dist_term_den * (inner_term - 1)
+
+    def psi_4(self, n, theta):
+        dist_term_num = np.exp(1j * self.beta * self.d * np.cos(theta) * n)
+        dist_term_den = 1j * self.beta * np.cos(theta)
+        inner_term1 = self.d * np.exp(1j * self.beta * self.d * np.cos(theta))
+        inner_term2 = (1 / (1j * self.beta * np.cos(theta))) * (np.exp(-1j * self.beta * self.d * np.cos(theta)) - 1)
+        return dist_term_num / dist_term_den * (inner_term1 - inner_term2)
+
+    def compute_scattered_field(self, theta):
+        Q = np.zeros(len(self.In), dtype=np.complex128)
+        for n in range(self.matrix_constructor.N):
+            Q[n] = self.In[n] * self.psi_3(n+1, theta) + (self.In[n+1] - self.In[n+2]) / self.d * self.psi_4(n, theta)
 
     def plot_current_distribution(self, axes: list[plt.Axes]):
         assert len(axes) < 3
