@@ -98,6 +98,7 @@ class WireScattererSystem:
         self.N = self.matrix_constructor.N
         self.beta = self.matrix_constructor.beta
         self.d = self.matrix_constructor.d
+        self.omega = self.matrix_constructor.omega
 
     def psi_3(self, n, theta):
         dist_term_num = np.exp(1j * self.beta * self.d * np.cos(theta) * n)
@@ -116,6 +117,14 @@ class WireScattererSystem:
         Q = np.zeros(len(self.In), dtype=np.complex128)
         for n in range(self.matrix_constructor.N):
             Q[n] = self.In[n] * self.psi_3(n+1, theta) + (self.In[n+1] - self.In[n+2]) / self.d * self.psi_4(n, theta)
+        def Erad(r):
+            return 1j * self.omega * np.sin(theta) * constants.mu_0 / (4 * np.pi) * np.exp(-1j * self.beta * r) / r * Q
+        return Erad, Q
+
+    def compute_rcs(self, theta):
+        _, Q = self.compute_scattered_field(theta)
+        numerator = (self.omega * constants.mu_0 * np.sin(theta)) ** 2 * abs(Q) ** 2
+        denom = 4 * np.pi * self.excitation_constructor.incident_magnitude ** 2
 
     def plot_current_distribution(self, axes: list[plt.Axes]):
         assert len(axes) < 3
