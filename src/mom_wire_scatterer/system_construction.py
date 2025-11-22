@@ -5,22 +5,23 @@ from typing import Tuple
 import matplotlib
 #matplotlib.use('Agg') # or 'TkAgg', 'Qt5Agg', etc.
 import matplotlib.pyplot as plt
+import scipy.io as scio
 
 
 class MatrixConstructor:
     def __init__(self, num_divisions: int, wire_length: float, wire_radius: float, omega: float,
-                 approx_degree: int = 6):
+                 approx_degree: int = 20):
         self.N, self.M = num_divisions, num_divisions
         self.L = wire_length
         self.a = wire_radius
         self.omega = omega
-        self.wavelength = 2 * np.pi * constants.c_0 / self.omega
-        self.beta = 2 * np.pi / self.wavelength
-        self.d = self.L / self.N
+        #self.wavelength = 2 * np.pi * constants.c_0 / self.omega
+        self.beta = self.omega * np.sqrt(constants.eps_0 * constants.mu_0)
+        self.d = self.L / (self.N + 1)
         self.approx_degree = approx_degree
-        self.Z = np.zeros((self.N, self.M), dtype=np.complex128)
-        for m in range(self.N):
-            for n in range(self.M):
+        self.Z = np.zeros((self.N, self.M), dtype=complex)
+        for m in range(self.M):
+            for n in range(self.N):
                 self.Z[m, n] = self.calculate_Zmn(m, n)
 
     def calculate_Zmn(self, m, n):
@@ -29,26 +30,26 @@ class MatrixConstructor:
         else:
             magnetic_potential_term = self.psi_1_neq(m, n)
         electric_potential_term = self.psi_2(m, n)
-        return (1j * self.omega * constants.mu_0 / (4 * np.pi) *
-                (magnetic_potential_term +
-                 (1 / (self.d * self.beta ** 2)) * electric_potential_term))
+        result = 1j * self.omega * (constants.mu_0 / (4 * np.pi)) * (magnetic_potential_term + (1 / (self.beta ** 2 * self.d)) * electric_potential_term)
+        return result
 
     def psi_1_eq(self, m, n):
         R = lambda x: np.sqrt(x ** 2 + self.a ** 2)
-        int1 = lambda x: (1 - x / self.d) * np.cos(self.beta * R(x)) / R(x) - np.cos(self.beta * self.a) / R(x)
+        """int1 = lambda x: (1 - x / self.d) * np.cos(self.beta * R(x)) / R(x) - np.cos(self.beta * self.a) / R(x)
         int2 = lambda x: (1 - x / self.d) * np.sin(self.beta * R(x)) / R(x)
         int3 = 2 * np.cos(self.beta * self.a) * np.log((self.d + np.sqrt(self.d ** 2 + self.a ** 2)) / self.a)
         result = (2 * numerical_integration.numerical_integral(int1, self.approx_degree, (0, self.d))
                 - 2j * numerical_integration.numerical_integral(int2, self.approx_degree, (0, self.d))
-                + int3)
-        #print(f'psi_1_eq m={m}, n={n}: {result}')
+                + int3)"""
+        int1 = lambda x: (1 - x/self.d) * (np.exp(-1j * self.beta * R(x)) / R(x)) - np.cos(self.beta * self.a) / R(x)
+        int3 = 2 * np.cos(self.beta * self.a) * np.log((self.d + np.sqrt(self.d ** 2 + self.a ** 2)) / self.a)
+        result = 2 * numerical_integration.numerical_integral(int1, self.approx_degree, (0, self.d)) + int3
         return result
 
     def psi_1_neq(self, m, n):
-        R = lambda x: np.sqrt(((m - n) * self.d - x) ** 2 + self.a ** 2)
+        R = lambda x: np.sqrt(((n - m) * self.d - x) ** 2 + self.a ** 2)
         psi_1 = lambda x: (1 - abs(x) / self.d) * np.exp(-1j * self.beta * R(x)) / R(x)
         result = numerical_integration.numerical_integral(psi_1, self.approx_degree, (-self.d, self.d))
-        #print(f'psi_1_neq m={m}, n={n}: {result}')
         return result
 
     def psi_2(self, m, n):
@@ -59,7 +60,6 @@ class MatrixConstructor:
         term1 = np.exp(-1j * self.beta * R_1) / R_1
         term2 = np.exp(-1j * self.beta * R_2) / R_2
         result = term1 - 2 * term0 + term2
-        #print(f'psi_2 m={m}, n={n}: {result}')
         return result
 
 
@@ -71,23 +71,23 @@ class ExcitationConstructor:
         self.d = self.wire_length / self.num_divisions
         self.wire_radius = wire_radius
         self.omega = omega
-        self.beta = 2 * np.pi * constants.c_0 / self.omega
+        self.beta = self.omega * np.sqrt(constants.eps_0 * constants.mu_0)
         self.incident_magnitude = incident_magnitude
         self.theta_incident = incident_angle
         self.E_iz = np.zeros(self.num_divisions, dtype=np.complex128)
         self.find_theta_Eiz()
 
     def find_theta_Eiz(self):
-        for division_index in range(self.num_divisions):
-            z_n_prime = self.d / 2 + self.d * division_index
+        for division_index in range(1, self.num_divisions+1):
+            z_n_prime = self.d * division_index
             # R = np.sqrt(self.source_x ** 2 + abs(self.source_z - z_n_prime) ** 2)
             R = z_n_prime * np.cos(self.theta_incident)
-            self.E_iz[division_index] = self.incident_magnitude * np.exp(-1j * self.beta * R)
+            self.E_iz[division_index-1] = self.incident_magnitude * np.exp(-1j * self.beta * R) * np.sin(self.theta_incident)
 
 
 class WireScattererSystem:
     def __init__(self, num_divisions: int, wire_length: float, wire_radius: float, omega: float, incident_angle: float,
-                 incident_magnitude: float = 1.0, approx_degree: int = 6):
+                 incident_magnitude: float = 1.0, approx_degree: int = 20):
         self.matrix_constructor = MatrixConstructor(num_divisions, wire_length, wire_radius, omega, approx_degree)
         self.excitation_constructor = ExcitationConstructor(num_divisions, wire_length, wire_radius, omega, incident_angle, incident_magnitude)
         self.E_iz = self.excitation_constructor.E_iz
@@ -100,30 +100,38 @@ class WireScattererSystem:
         self.rcs = self.compute_rcs(self.excitation_constructor.theta_incident)
 
     def psi_3(self, n, theta):
-        dist_term_num = np.exp(1j * self.beta * self.d * np.cos(theta) * n)
+        dist_term_num = np.exp(1j * self.beta * self.d * np.cos(theta) * (n-1))
         dist_term_den = 1j * self.beta * np.cos(theta)
-        inner_term = np.exp(-1j * self.beta * self.d * np.cos(theta))
-        return dist_term_num / dist_term_den * (inner_term - 1)
+        inner_term = np.exp(1j * self.beta * self.d * np.cos(theta))
+        result = dist_term_num / dist_term_den * (inner_term - 1)
+        return result
 
     def psi_4(self, n, theta):
-        dist_term_num = np.exp(1j * self.beta * self.d * np.cos(theta) * n)
-        dist_term_den = 1j * self.beta * np.cos(theta)
-        inner_term1 = self.d * np.exp(1j * self.beta * self.d * np.cos(theta))
-        inner_term2 = (1 / (1j * self.beta * np.cos(theta))) * (np.exp(-1j * self.beta * self.d * np.cos(theta)) - 1)
-        return dist_term_num / dist_term_den * (inner_term1 - inner_term2)
+        if abs(theta - np.pi / 2) <= 0.00001:
+            cos_theta = 1e-22
+        else:
+            cos_theta = np.cos(theta)
+        dist_term_num = np.exp(1j * self.beta * self.d * cos_theta * (n-1))
+        dist_term_den = 1j * self.beta * cos_theta
+        inner_term1 = self.d * np.exp(1j * self.beta * self.d * cos_theta)
+        inner_term2 = (1 / (1j * self.beta * cos_theta)) * (np.exp(1j * self.beta * self.d * cos_theta) - 1)
+        result = (dist_term_num / dist_term_den) * (inner_term1 - inner_term2)
+        return result.real
 
     def compute_scattered_field(self, theta):
         Q = 0
-        I_appended = np.insert(np.insert(self.In, 0, 0), -1, 0)
-        for n in range(self.matrix_constructor.N):
-            Q += I_appended[n] * self.psi_3(n, theta) + (I_appended[n+1] - I_appended[n+2]) / self.d * self.psi_4(n, theta)
+        I_appended = self.In
+        I_appended = np.insert(I_appended, 0, 0)
+        I_appended = np.insert(I_appended, len(I_appended), 0)
+        for n in range(1,self.matrix_constructor.N+2):
+            Q += I_appended[n-1] * self.psi_3(n, theta) + (I_appended[n] - I_appended[n-1]) / self.d * self.psi_4(n, theta)
         def Erad(r):
             return 1j * self.omega * np.sin(theta) * constants.mu_0 / (4 * np.pi) * np.exp(-1j * self.beta * r) / r * Q
         return Erad, Q
 
     def compute_rcs(self, theta):
         _, Q = self.compute_scattered_field(theta)
-        numerator = (self.omega * constants.mu_0 * np.sin(theta)) ** 2 * abs(Q) ** 2
+        numerator = (self.omega * constants.mu_0 * np.sin(theta) * abs(Q)) ** 2
         denom = 4 * np.pi * self.excitation_constructor.incident_magnitude ** 2
         return numerator / denom
 
@@ -139,17 +147,96 @@ class WireScattererSystem:
 
 if __name__ == '__main__':
     E_mag = 1.0
-    L = 2
+    L = 2.0
     num_divs = 100
     wire_radius = 12.5e-3
     f = 300E6
     omega = 2 * np.pi * f
-    incident_angle = np.pi / 2
-    scatter_system = WireScattererSystem(num_divs, L, wire_radius, omega, incident_angle)
-    _, ax1 = plt.subplots()
-    _, ax2 = plt.subplots()
-    scatter_system.plot_current_distribution([ax1, ax2])
-    ax1.set_title('Magnitude of Current Distribution along the Wire Scatterer')
-    ax2.set_title('Phase of Current Distribution along the Wire Scatterer')
+
+    # -------------------- VARY APPROX DEGREE --------------------
+    approx_degrees = [10, 20, 40, 60, 100]
+    var_divs = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+    rcs_db_lists = []
+    for approx_degree in approx_degrees:
+        rcs_list = []
+        for var_div in var_divs:
+            solver = WireScattererSystem(var_div, L, wire_radius, omega, np.pi / 2, approx_degree=approx_degree)
+            rcs_list.append(10 * np.log10(solver.rcs))
+        rcs_db_lists.append(rcs_list)
+    for index, approx_degree in enumerate(approx_degrees):
+        plt.plot(var_divs, rcs_db_lists[index], label=f'Degree={approx_degree}')
+    plt.plot(var_divs, [10 * np.log10(1.27) for div in var_divs], linestyle='dashed', label='True Value')
+    plt.legend()
+    plt.title('Convergence of RCS for different Approximation Degrees')
+    plt.xlabel('Number of Divisions')
+    plt.ylabel('RCS (dB)')
     plt.show()
-    print(f'RCS: {scatter_system.rcs}')
+
+    # -------------------- VARY ANGLE --------------------
+
+    incident_angles = [np.pi / 2, 30/180 * np.pi, 75/180 * np.pi]
+    #var_divs = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]#, 120, 140, 160, 180, 200]
+    # TODO: FIX RCS TO WORK FOR ANGLES OTHER THAN 90
+    """for incident_angle in incident_angles:
+        scatter_system = WireScattererSystem(num_divs, L, wire_radius, omega, incident_angle)
+        print(f'RCS for theta={incident_angle}: {scatter_system.rcs}')
+        _, ax1 = plt.subplots()
+        _, ax2 = plt.subplots()
+        scatter_system.plot_current_distribution([ax1, ax2])
+        ax1.set_title(
+            f'Magnitude of Current Distribution along Wire\n theta={(incident_angle * 180 / np.pi):.0f}\N{DEGREE SIGN}')
+        ax1.set_xlabel('Position (m)')
+        ax1.set_ylabel('Magnitude (Amp)')
+        ax2.set_title(
+            f'Phase of Current Distribution along Wire\n theta={(incident_angle * 180 / np.pi):.0f}\N{DEGREE SIGN}')
+        ax2.set_xlabel('Position (m)')
+        ax2.set_ylabel('Phase (rad)')
+        plt.show()"""
+    """rcs_list = []
+    rcs_list_db = []
+    for incident_angle in incident_angles:
+
+        for div in var_divs:
+            scatter_system = WireScattererSystem(div, L, wire_radius, omega, incident_angle)
+            if incident_angle == incident_angles[0]:
+                rcs_list.append(scatter_system.rcs)
+                rcs_list_db.append(10 * np.log10(scatter_system.rcs))
+            if div == 10 or div == 20 or div == 40 or div == 80:
+                # plot current distribution (magnitude and phase)
+                _, ax1 = plt.subplots()
+                _, ax2 = plt.subplots()
+                scatter_system.plot_current_distribution([ax1, ax2])
+                ax1.set_title(f'Magnitude of Current Distribution along Wire\n theta={(incident_angle * 180 / np.pi):.0f}\N{DEGREE SIGN}, N={div}')
+                ax1.set_xlabel('Position (m)')
+                ax1.set_ylabel('Magnitude (Amp)')
+                ax2.set_title(f'Phase of Current Distribution along Wire\n theta={(incident_angle * 180 / np.pi):.0f}\N{DEGREE SIGN}, N={div}')
+                ax2.set_xlabel('Position (m)')
+                ax2.set_ylabel('Phase (rad)')
+                plt.show()
+                #print(f'RCS for theta={(incident_angle * 180 / np.pi):.0f}\N{DEGREE SIGN}: {rcs_list_db[-1]}')
+        #rcs_lists.append(rcs_list_db)
+    plt.plot(var_divs, rcs_list_db, label='theta=90\N{DEGREE SIGN}')
+    #plt.plot(var_divs, rcs_lists[1], label='theta=30\N{DEGREE SIGN}')
+    #plt.plot(var_divs, rcs_lists[2], label='theta=75\N{DEGREE SIGN}')
+    plt.xlabel('Number of Divisions')
+    plt.ylabel('RCS (dB)')
+    plt.plot(var_divs, [1.27 for val in var_divs])
+    plt.title('Convergence of RCS with increasing Number of Divisions\ntheta=90\N{DEGREE SIGN}')
+    plt.show()
+
+    # -------------------- VARY LENGTH --------------------
+
+    lengths = np.linspace(0.25, 2, 51)
+    lengths_and_radii = [(length, length/160) for length in lengths]
+
+    rcs_vals = []
+
+    for L, a in lengths_and_radii:
+        scatter_system = WireScattererSystem(num_divs, L, a, omega, np.pi / 2)
+        rcs_vals.append(10*np.log10(scatter_system.rcs))
+        print(f'RCS for L={L}m: {rcs_vals[-1]}')
+    plt.plot(lengths, rcs_vals)
+    plt.title('RCS for a Variety of Wire Lengths')
+    plt.xlabel('Wire Length (m)')
+    plt.ylabel('RCS (dB)')
+    plt.show()"""
